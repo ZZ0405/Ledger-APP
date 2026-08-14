@@ -134,6 +134,10 @@
     return new Date(d.getFullYear(), d.getMonth() + n, 1);
   }
 
+  function monthsBetween(d1, d2) {
+    return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+  }
+
   function monthKey(dateStr) {
     return dateStr.slice(0, 7);
   }
@@ -518,6 +522,19 @@
 
     html += '<div class="card"><h3>本月合计</h3><div class="big-number">' + money(total) + '</div></div>';
 
+    if (expenseMonth === monthKey(todayStr())) {
+      var budget = state.cashFlowParams.lifeExpenseCommute + state.cashFlowParams.lifeExpenseFood + state.cashFlowParams.lifeExpenseFamily + state.cashFlowParams.lifeExpensePersonal;
+      if (budget > 0) {
+        var budgetPct = Math.round((total / budget) * 100);
+        var over = total > budget;
+        html += '<div class="card">';
+        html += '<h3>本月开销 vs 预算</h3>';
+        html += '<div class="progress-track"><div class="progress-fill' + (over ? ' over' : '') + '" style="width:' + Math.min(100, budgetPct) + '%"></div></div>';
+        html += '<div class="sub-number" style="' + (over ? 'color:var(--danger);font-weight:600;' : '') + '">已花 ' + money(total) + ' / 预算 ' + money(budget) + '（' + budgetPct + '%）' + (over ? ' · 已超支 ' + money(total - budget) : '') + '</div>';
+        html += '</div>';
+      }
+    }
+
     if (catKeys.length) {
       html += '<div class="card"><h3>分类占比</h3>';
       catKeys.forEach(function (c) {
@@ -628,6 +645,41 @@
     html += '</div>';
 
     var totalPrincipal = totalLoanPrincipal();
+
+    if (totalPrincipal > 0) {
+      var totalActualPaidAll = 0;
+      state.repaymentPlan.years.forEach(function (y) { totalActualPaidAll += sum(y.actualPayments, function (p) { return p.amount; }); });
+      var allocatedTotal = totalActualPaidAll + reserveBalance();
+      var remainingToAllocate = Math.max(0, totalPrincipal - allocatedTotal);
+      var startDate = parseDate(state.repaymentPlan.startDate);
+      var now = new Date();
+      var monthsElapsed = Math.max(1, monthsBetween(startDate, now) + 1);
+      var avgMonthlyAllocation = allocatedTotal / monthsElapsed;
+      var targetEndDate = addMonths(startDate, state.repaymentPlan.targetYears * 12);
+
+      html += '<div class="card">';
+      html += '<h3>预计提前还清</h3>';
+      if (remainingToAllocate <= 0) {
+        html += '<div class="sub-number">🎉 已攒够/还清全部本金</div>';
+      } else if (avgMonthlyAllocation <= 0) {
+        html += '<div class="sub-number">暂无储备或还款记录，开始存入后即可推算</div>';
+      } else {
+        var monthsRemaining = Math.ceil(remainingToAllocate / avgMonthlyAllocation);
+        var payoffDate = addMonths(now, monthsRemaining);
+        var diffMonths = monthsBetween(payoffDate, targetEndDate);
+        html += '<div class="sub-number">按目前平均每月 ' + money(avgMonthlyAllocation) + ' 的存入/还款速度推算</div>';
+        html += '<div class="big-number" style="font-size:20px;">' + payoffDate.getFullYear() + '年' + (payoffDate.getMonth() + 1) + '月 还清</div>';
+        if (diffMonths > 0) {
+          html += '<div class="sub-number" style="color:var(--teal-dark);font-weight:600;">比原计划（' + state.repaymentPlan.targetYears + '年）提前约 ' + diffMonths + ' 个月</div>';
+        } else if (diffMonths < 0) {
+          html += '<div class="sub-number" style="color:var(--danger);font-weight:600;">比原计划（' + state.repaymentPlan.targetYears + '年）晚约 ' + (-diffMonths) + ' 个月</div>';
+        } else {
+          html += '<div class="sub-number">与原计划基本一致</div>';
+        }
+      }
+      html += '</div>';
+    }
+
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">贷款合同明细</h3><button class="link-btn" id="toggleContracts">展开/收起</button></div>';
     html += '<div class="sub-number">合计本金 ' + money(totalPrincipal) + ' · 共 ' + state.loanContracts.length + ' 笔</div>';
