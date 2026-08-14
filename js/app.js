@@ -16,12 +16,7 @@
   ];
 
   function defaultLoanContracts() {
-    return [
-      { id: uid(), term: "2022-2023学年", contractNo: "44532101H20220000724", principal: 10000, issueDate: "2022-11-14", dueDate: "2037-09-20", interestFreeUntil: "2026-08-31", rate: 0.028, org: "新兴县教育局", agent: "招商银行(广东)" },
-      { id: uid(), term: "2023-2024学年", contractNo: "44532101H20230000570", principal: 15000, issueDate: "2023-11-15", dueDate: "2041-09-20", interestFreeUntil: "2026-08-31", rate: 0.028, org: "新兴县教育局", agent: "招商银行(广东)" },
-      { id: uid(), term: "2024-2025学年", contractNo: "44532101H20240000146", principal: 20000, issueDate: "2024-11-19", dueDate: "2039-09-20", interestFreeUntil: "2026-08-31", rate: 0.028, org: "新兴县教育局", agent: "招商银行(广东)" },
-      { id: uid(), term: "2025-2026学年", contractNo: "44532101H20250000233", principal: 20000, issueDate: "2025-10-10", dueDate: "2040-09-20", interestFreeUntil: "2026-08-31", rate: 0.028, org: "新兴县教育局", agent: "招商银行(广东)" }
-    ];
+    return [];
   }
 
   function buildRepaymentYears(startDate, targetYears, totalPrincipal) {
@@ -62,19 +57,19 @@
       goals: [],
 
       cashFlowParams: {
-        baseSalary: 8000,
-        transportPerDay: 20,
+        baseSalary: 0,
+        transportPerDay: 0,
         transportDays: 20,
         insuranceRate: 0.102,
         housingFundRate: 0.05,
-        housingFundStartDate: "2026-08-01",
+        housingFundStartDate: todayStr(),
         taxBaseDeduction: 5000,
-        pensionMonthly: 200,
-        pensionStartDate: "2026-08-01",
-        lifeExpenseCommute: 200,
-        lifeExpenseFood: 900,
-        lifeExpenseFamily: 1250,
-        lifeExpensePersonal: 650,
+        pensionMonthly: 0,
+        pensionStartDate: todayStr(),
+        lifeExpenseCommute: 0,
+        lifeExpenseFood: 0,
+        lifeExpenseFamily: 0,
+        lifeExpensePersonal: 0,
         reserveMonthlyOverride: null
       },
 
