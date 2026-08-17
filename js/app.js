@@ -56,6 +56,8 @@
 
       goals: [],
 
+      salaryRecords: [],
+
       cashFlowParams: {
         baseSalary: 0,
         transportPerDay: 0,
@@ -202,17 +204,28 @@
     return totalLoanPrincipal() / years / 12;
   }
 
+  function splitFromNetPay(netPay, d, params) {
+    var pStart = parseDate(params.pensionStartDate);
+    var pension = d >= new Date(pStart.getFullYear(), pStart.getMonth(), 1) ? Number(params.pensionMonthly) : 0;
+    var lifeExpense = Number(params.lifeExpenseCommute) + Number(params.lifeExpenseFood) + Number(params.lifeExpenseFamily) + Number(params.lifeExpensePersonal);
+    var surplus = round2(netPay - pension - lifeExpense);
+    var reserveTarget = reserveMonthlyTarget();
+    var reserveSplit = round2(Math.max(0, Math.min(surplus, reserveTarget)));
+    var savingsSplit = round2(surplus - reserveSplit);
+    return { pension: pension, lifeExpense: lifeExpense, surplus: surplus, reserveSplit: reserveSplit, savingsSplit: savingsSplit };
+  }
+
   function computeMonthRow(d, cum, params) {
     var taxableIncome = Number(params.baseSalary) + Number(params.transportPerDay) * Number(params.transportDays);
     var insurance = round2(taxableIncome * params.insuranceRate);
     var hfStart = parseDate(params.housingFundStartDate);
-    var pStart = parseDate(params.pensionStartDate);
     var housingFund = d >= new Date(hfStart.getFullYear(), hfStart.getMonth(), 1) ? round2(taxableIncome * params.housingFundRate) : 0;
-    var pension = d >= new Date(pStart.getFullYear(), pStart.getMonth(), 1) ? Number(params.pensionMonthly) : 0;
 
     cum.income += taxableIncome;
     cum.baseDeduction += Number(params.taxBaseDeduction);
-    cum.specialDeduction += insurance + housingFund + pension;
+    var pStartForDeduction = parseDate(params.pensionStartDate);
+    var pensionDeduction = d >= new Date(pStartForDeduction.getFullYear(), pStartForDeduction.getMonth(), 1) ? Number(params.pensionMonthly) : 0;
+    cum.specialDeduction += insurance + housingFund + pensionDeduction;
 
     var cumTaxable = Math.max(0, cum.income - cum.baseDeduction - cum.specialDeduction);
     var bracket = findBracket(cumTaxable);
@@ -222,26 +235,18 @@
     cum.taxWithheld += monthTax;
 
     var netPay = round2(taxableIncome - insurance - housingFund - monthTax);
-    var lifeExpense = Number(params.lifeExpenseCommute) + Number(params.lifeExpenseFood) + Number(params.lifeExpenseFamily) + Number(params.lifeExpensePersonal);
-    var surplus = round2(netPay - pension - lifeExpense);
-    var reserveTarget = reserveMonthlyTarget();
-    var reserveSplit = Math.max(0, Math.min(surplus, reserveTarget));
-    var savingsSplit = round2(surplus - reserveSplit);
+    var split = splitFromNetPay(netPay, d, params);
 
-    return {
+    return Object.assign({
       date: d,
       monthLabel: d.getFullYear() + "年" + (d.getMonth() + 1) + "月",
       taxableIncome: taxableIncome,
       insurance: insurance,
       housingFund: housingFund,
-      pension: pension,
       monthTax: monthTax,
       netPay: netPay,
-      lifeExpense: lifeExpense,
-      surplus: surplus,
-      reserveSplit: round2(reserveSplit),
-      savingsSplit: savingsSplit
-    };
+      confirmed: false
+    }, split);
   }
 
   function getCashFlowSeries(startDate, count) {
@@ -255,14 +260,23 @@
         year = d.getFullYear();
         cum = { income: 0, baseDeduction: 0, specialDeduction: 0, taxWithheld: 0 };
       }
-      rows.push(computeMonthRow(d, cum, params));
+      var row = computeMonthRow(d, cum, params);
+      var rec = getConfirmedSalary(monthKey(fmtDate(d)));
+      if (rec) {
+        var split = splitFromNetPay(rec.actualNetPay, d, params);
+        row = Object.assign({}, row, split, { netPay: rec.actualNetPay, confirmed: true });
+      }
+      rows.push(row);
     }
     return rows;
   }
 
+  function getConfirmedSalary(mKey) {
+    return state.salaryRecords.find(function (r) { return r.month === mKey; });
+  }
+
   function currentMonthCashFlow() {
     var now = new Date();
-    var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     var yearStart = new Date(now.getFullYear(), 0, 1);
     var monthsSinceYearStart = now.getMonth();
     var series = getCashFlowSeries(yearStart, monthsSinceYearStart + 1);
@@ -473,7 +487,7 @@
     html += '</div>';
 
     html += '<div class="card">';
-    html += '<h3>本月现金流（' + cf.monthLabel + '，测算值）</h3>';
+    html += '<h3>本月现金流（' + cf.monthLabel + (cf.confirmed ? '，已确认' : '，测算值') + '）</h3>';
     html += '<div class="row"><span>到手工资</span><span class="big-number" style="font-size:18px;">' + money(cf.netPay) + '</span></div>';
     html += '<div class="row"><span>预计结余</span><span>' + money(cf.surplus) + '</span></div>';
     html += '<div class="row"><span>→ 还款储备</span><span>' + money(cf.reserveSplit) + '</span></div>';
@@ -877,19 +891,29 @@
     html += '</div>';
 
     html += '<div class="card">';
-    html += '<h3>本月测算 · ' + cf.monthLabel + '</h3>';
+    html += '<div class="row"><h3 style="margin:0;">' + (cf.confirmed ? '本月工资（已确认）' : '本月测算（估算）') + ' · ' + cf.monthLabel + '</h3><button class="link-btn" id="confirmSalaryBtn">' + (cf.confirmed ? '修改' : '确认工资') + '</button></div>';
     html += '<div class="row"><span>到手工资</span><span>' + money(cf.netPay) + '</span></div>';
     html += '<div class="row"><span>结余</span><span>' + money(cf.surplus) + '</span></div>';
     html += '<div class="row"><span>划入还款储备</span><span>' + money(cf.reserveSplit) + '</span></div>';
     html += '<div class="row"><span>划入个人储蓄</span><span>' + money(cf.savingsSplit) + '</span></div>';
+    if (!cf.confirmed) html += '<div class="sub-number">这是按现金流参数估算的数字，实际工资以工资条为准——拿到工资条后点"确认工资"填入实发数额</div>';
     html += '<button class="btn btn-primary btn-block" id="registerMonthBtn" style="margin-top:10px;">登记本月存入</button>';
     html += '</div>';
 
     html += '<div class="card">';
-    html += '<h3>未来6个月测算</h3>';
+    html += '<div class="row"><h3 style="margin:0;">未来6个月测算</h3><button class="link-btn" id="toggleSalaryHistory">工资记录</button></div>';
     series.forEach(function (r) {
-      html += '<div class="row"><span>' + r.monthLabel + '</span><span>到手 ' + money(r.netPay) + ' · 储备 ' + money(r.reserveSplit) + ' · 储蓄 ' + money(r.savingsSplit) + '</span></div>';
+      html += '<div class="row"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 储备 ' + money(r.reserveSplit) + ' · 储蓄 ' + money(r.savingsSplit) + '</span></div>';
     });
+    html += '<div class="history-list" id="salaryHistory" style="display:none;">';
+    if (!state.salaryRecords.length) {
+      html += '<div class="hrow"><span>暂无确认记录</span></div>';
+    } else {
+      state.salaryRecords.slice().sort(function (a, b) { return b.month.localeCompare(a.month); }).forEach(function (r) {
+        html += '<div class="hrow"><span>' + r.month + (r.note ? " · " + escapeHtml(r.note) : "") + '</span><span>' + money(r.actualNetPay) + '</span></div>';
+      });
+    }
+    html += '</div>';
     html += '</div>';
 
     html += '<div class="section-title"><h2>理财 / 储蓄目标</h2></div>';
@@ -1224,6 +1248,45 @@
 
     if (page === "goals") {
       document.getElementById("editParamsBtn").addEventListener("click", openCashFlowParamsModal);
+      document.getElementById("confirmSalaryBtn").addEventListener("click", function () {
+        var now = new Date();
+        var mKey = monthKey(fmtDate(now));
+        var existing = getConfirmedSalary(mKey);
+        openFormModal({
+          title: "确认本月工资 · " + monthLabel(mKey),
+          fields: [
+            { key: "actualNetPay", label: "本月实发工资（工资条上的实发数额）", type: "number", value: existing ? existing.actualNetPay : "" },
+            { key: "note", label: "备注（可选）", type: "text", value: existing ? existing.note : "" }
+          ],
+          submitLabel: "保存",
+          showDelete: !!existing,
+          onDelete: function () {
+            state.salaryRecords = state.salaryRecords.filter(function (r) { return r.month !== mKey; });
+            saveState();
+            closeModal();
+            render();
+            toast("已删除，改回按测算值显示");
+          },
+          onSubmit: function (v) {
+            var amount = parseFloat(v.actualNetPay);
+            if (isNaN(amount) || amount <= 0) { toast("请填写正确的实发工资"); return; }
+            if (existing) {
+              existing.actualNetPay = amount;
+              existing.note = v.note;
+            } else {
+              state.salaryRecords.push({ id: uid(), month: mKey, actualNetPay: amount, note: v.note });
+            }
+            saveState();
+            closeModal();
+            render();
+            toast("已确认本月工资");
+          }
+        });
+      });
+      document.getElementById("toggleSalaryHistory").addEventListener("click", function () {
+        var box = document.getElementById("salaryHistory");
+        box.style.display = box.style.display === "none" ? "block" : "none";
+      });
       document.getElementById("registerMonthBtn").addEventListener("click", function () {
         var cf = currentMonthCashFlow();
         openFormModal({
@@ -1237,7 +1300,7 @@
           onSubmit: function (v) {
             var r = parseFloat(v.reserveAmount) || 0;
             var s = parseFloat(v.savingsAmount) || 0;
-            if (r > 0) state.reserveFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: r, note: cf.monthLabel + " 现金流测算" });
+            if (r > 0) state.reserveFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: r, note: cf.monthLabel + (cf.confirmed ? " 实际工资" : " 现金流测算") });
             if (s > 0) {
               var goal = findOrCreatePersonalSavingsGoal();
               goal.contributions.push({ id: uid(), date: v.date, amount: s });
