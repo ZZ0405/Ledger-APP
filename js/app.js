@@ -209,10 +209,7 @@
     var pension = d >= new Date(pStart.getFullYear(), pStart.getMonth(), 1) ? Number(params.pensionMonthly) : 0;
     var lifeExpense = Number(params.lifeExpenseCommute) + Number(params.lifeExpenseFood) + Number(params.lifeExpenseFamily) + Number(params.lifeExpensePersonal);
     var surplus = round2(netPay - pension - lifeExpense);
-    var reserveTarget = reserveMonthlyTarget();
-    var reserveSplit = round2(Math.max(0, Math.min(surplus, reserveTarget)));
-    var savingsSplit = round2(surplus - reserveSplit);
-    return { pension: pension, lifeExpense: lifeExpense, surplus: surplus, reserveSplit: reserveSplit, savingsSplit: savingsSplit };
+    return { pension: pension, lifeExpense: lifeExpense, surplus: surplus };
   }
 
   function computeMonthRow(d, cum, params) {
@@ -489,15 +486,15 @@
     html += '<div class="card">';
     html += '<h3>本月现金流（' + cf.monthLabel + (cf.confirmed ? '，已确认' : '，测算值') + '）</h3>';
     html += '<div class="row"><span>到手工资</span><span class="big-number" style="font-size:18px;">' + money(cf.netPay) + '</span></div>';
-    html += '<div class="row"><span>预计结余</span><span>' + money(cf.surplus) + '</span></div>';
-    html += '<div class="row"><span>→ 还款储备</span><span>' + money(cf.reserveSplit) + '</span></div>';
-    html += '<div class="row"><span>→ 个人储蓄</span><span>' + money(cf.savingsSplit) + '</span></div>';
+    html += '<div class="row"><span>预计结余（存入储备资金池）</span><span>' + money(cf.surplus) + '</span></div>';
     html += '</div>';
 
     html += '<div class="card">';
     html += '<h3>资金余额</h3>';
     html += '<div class="row"><span>还款储备金余额</span><span style="font-weight:600;">' + money(reserveBalance) + '</span></div>';
-    html += '<div class="row"><span>个人储蓄合计</span><span style="font-weight:600;">' + money(savingsGoalsTotal) + '</span></div>';
+    if (savingsGoalsTotal > 0) {
+      html += '<div class="row"><span>其他理财目标合计</span><span style="font-weight:600;">' + money(savingsGoalsTotal) + '</span></div>';
+    }
     html += '</div>';
 
     html += '<div class="card">';
@@ -866,15 +863,6 @@
     return sum(goal.contributions, function (c) { return c.amount; });
   }
 
-  function findOrCreatePersonalSavingsGoal() {
-    var g = state.goals.find(function (x) { return x.name === "个人储蓄"; });
-    if (!g) {
-      g = { id: uid(), name: "个人储蓄", target: 0, targetDate: "", note: "", contributions: [] };
-      state.goals.push(g);
-    }
-    return g;
-  }
-
   function renderGoals() {
     var params = state.cashFlowParams;
     var cf = currentMonthCashFlow();
@@ -887,15 +875,13 @@
     html += '<div class="sub-number">基本工资 ' + money(params.baseSalary) + ' · 交通补贴 ' + money(params.transportPerDay * params.transportDays) + '/月</div>';
     html += '<div class="sub-number">五险 ' + (params.insuranceRate * 100).toFixed(1) + '% · 公积金 ' + (params.housingFundRate * 100).toFixed(1) + '%（' + params.housingFundStartDate + ' 起）</div>';
     html += '<div class="sub-number">生活开销合计 ' + money(params.lifeExpenseCommute + params.lifeExpenseFood + params.lifeExpenseFamily + params.lifeExpensePersonal) + '/月 · 目标还款年限 ' + state.repaymentPlan.targetYears + ' 年</div>';
-    html += '<div class="sub-number">每月还款储备目标 ' + money(reserveMonthlyTarget()) + '</div>';
+    html += '<div class="sub-number">参考：达成' + state.repaymentPlan.targetYears + '年计划所需的月均储备速度 ' + money(reserveMonthlyTarget()) + '（实际每月全部结余都会存入储备资金池）</div>';
     html += '</div>';
 
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">' + (cf.confirmed ? '本月工资（已确认）' : '本月测算（估算）') + ' · ' + cf.monthLabel + '</h3><button class="link-btn" id="confirmSalaryBtn">' + (cf.confirmed ? '修改' : '确认工资') + '</button></div>';
     html += '<div class="row"><span>到手工资</span><span>' + money(cf.netPay) + '</span></div>';
-    html += '<div class="row"><span>结余</span><span>' + money(cf.surplus) + '</span></div>';
-    html += '<div class="row"><span>划入还款储备</span><span>' + money(cf.reserveSplit) + '</span></div>';
-    html += '<div class="row"><span>划入个人储蓄</span><span>' + money(cf.savingsSplit) + '</span></div>';
+    html += '<div class="row"><span>结余（存入储备资金池）</span><span>' + money(cf.surplus) + '</span></div>';
     if (!cf.confirmed) html += '<div class="sub-number">这是按现金流参数估算的数字，实际工资以工资条为准——拿到工资条后点"确认工资"填入实发数额</div>';
     html += '<button class="btn btn-primary btn-block" id="registerMonthBtn" style="margin-top:10px;">登记本月存入</button>';
     html += '</div>';
@@ -903,7 +889,7 @@
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">未来6个月测算</h3><button class="link-btn" id="toggleSalaryHistory">工资记录</button></div>';
     series.forEach(function (r) {
-      html += '<div class="row"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 储备 ' + money(r.reserveSplit) + ' · 储蓄 ' + money(r.savingsSplit) + '</span></div>';
+      html += '<div class="row"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 结余 ' + money(r.surplus) + '</span></div>';
     });
     html += '<div class="history-list" id="salaryHistory" style="display:none;">';
     if (!state.salaryRecords.length) {
@@ -1293,18 +1279,12 @@
           title: "登记本月存入 · " + cf.monthLabel,
           fields: [
             { key: "date", label: "日期", type: "date", value: todayStr() },
-            { key: "reserveAmount", label: "存入还款储备金", type: "number", value: cf.reserveSplit },
-            { key: "savingsAmount", label: "存入个人储蓄", type: "number", value: cf.savingsSplit }
+            { key: "amount", label: "存入还款储备资金池", type: "number", value: cf.surplus }
           ],
           submitLabel: "确认登记",
           onSubmit: function (v) {
-            var r = parseFloat(v.reserveAmount) || 0;
-            var s = parseFloat(v.savingsAmount) || 0;
-            if (r > 0) state.reserveFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: r, note: cf.monthLabel + (cf.confirmed ? " 实际工资" : " 现金流测算") });
-            if (s > 0) {
-              var goal = findOrCreatePersonalSavingsGoal();
-              goal.contributions.push({ id: uid(), date: v.date, amount: s });
-            }
+            var amount = parseFloat(v.amount) || 0;
+            if (amount > 0) state.reserveFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: amount, note: cf.monthLabel + (cf.confirmed ? " 实际结余" : " 现金流测算") });
             saveState();
             closeModal();
             render();
