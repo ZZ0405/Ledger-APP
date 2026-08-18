@@ -1373,8 +1373,17 @@
 
   if ("serviceWorker" in navigator && window.isSecureContext) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js").catch(function (err) {
+      navigator.serviceWorker.register("./sw.js").then(function (reg) {
+        reg.update();
+        setInterval(function () { reg.update(); }, 30 * 60 * 1000);
+      }).catch(function (err) {
         console.warn("Service worker 注册失败", err);
+      });
+      var reloaded = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
       });
     });
   }
