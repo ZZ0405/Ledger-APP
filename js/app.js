@@ -53,6 +53,7 @@
         years: buildRepaymentYears("2026-08-01", 6, totalPrincipal)
       },
       reserveFund: { transactions: [] },
+      emergencyFund: { transactions: [] },
 
       goals: [],
 
@@ -72,6 +73,7 @@
         lifeExpenseFood: 0,
         lifeExpenseFamily: 0,
         lifeExpensePersonal: 0,
+        emergencyFundMonthly: 1000,
         reserveMonthlyOverride: null
       },
 
@@ -209,7 +211,9 @@
     var pension = d >= new Date(pStart.getFullYear(), pStart.getMonth(), 1) ? Number(params.pensionMonthly) : 0;
     var lifeExpense = Number(params.lifeExpenseCommute) + Number(params.lifeExpenseFood) + Number(params.lifeExpenseFamily) + Number(params.lifeExpensePersonal);
     var surplus = round2(netPay - pension - lifeExpense);
-    return { pension: pension, lifeExpense: lifeExpense, surplus: surplus };
+    var emergencyContribution = round2(Math.max(0, Math.min(surplus, Number(params.emergencyFundMonthly))));
+    var reserveContribution = round2(surplus - emergencyContribution);
+    return { pension: pension, lifeExpense: lifeExpense, surplus: surplus, emergencyContribution: emergencyContribution, reserveContribution: reserveContribution };
   }
 
   function computeMonthRow(d, cum, params) {
@@ -442,8 +446,8 @@
     var actualSpend = sum(monthExpenses, function (x) { return x.amount; });
 
     var cf = currentMonthCashFlow();
-    var reserveBalance = sum(state.reserveFund.transactions, function (t) { return t.type === "deposit" ? t.amount : -t.amount; });
-    var savingsGoalsTotal = sum(state.goals, function (g) { return goalCurrentAmount(g); });
+    var reserveBal = reserveBalance();
+    var emergBalance = emergencyBalance();
 
     var now = new Date();
     var activeYear = state.repaymentPlan.years.find(function (y, idx) {
@@ -484,29 +488,63 @@
     html += '</div>';
 
     html += '<div class="card">';
-    html += '<h3>本月现金流（' + cf.monthLabel + (cf.confirmed ? '，已确认' : '，测算值') + '）</h3>';
+    html += '<h3>本月工资（' + cf.monthLabel + (cf.confirmed ? '，已确认' : '，测算值') + '）</h3>';
     html += '<div class="row"><span>到手工资</span><span class="big-number" style="font-size:18px;">' + money(cf.netPay) + '</span></div>';
-    html += '<div class="row"><span>预计结余（存入储备资金池）</span><span>' + money(cf.surplus) + '</span></div>';
+    html += '<div class="row"><span>结余（按下方两条路径存入）</span><span>' + money(cf.surplus) + '</span></div>';
+    html += '</div>';
+
+    html += '<div class="section-title"><h2>每月四块去处</h2></div>';
+
+    html += '<div class="card">';
+    html += '<div class="row"><h3 style="margin:0;">① 生活开销</h3><span class="sub-number">预算 ' + money(cf.lifeExpense) + '/月</span></div>';
+    html += '<div class="row"><span>本月已记录支出</span><span style="font-weight:600;' + (actualSpend > cf.lifeExpense ? "color:var(--danger);" : "") + '">' + money(actualSpend) + '</span></div>';
     html += '</div>';
 
     html += '<div class="card">';
-    html += '<h3>资金余额</h3>';
-    html += '<div class="row"><span>还款储备金余额</span><span style="font-weight:600;">' + money(reserveBalance) + '</span></div>';
-    if (savingsGoalsTotal > 0) {
-      html += '<div class="row"><span>其他理财目标合计</span><span style="font-weight:600;">' + money(savingsGoalsTotal) + '</span></div>';
+    html += '<div class="row"><h3 style="margin:0;">② 个人养老金</h3><span class="sub-number">每月固定划扣（如有调整请在参数里改）</span></div>';
+    html += '<div class="row"><span>本月养老金</span><span style="font-weight:600;">' + money(cf.pension) + '</span></div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="row"><h3 style="margin:0;">③ 应急金（活钱宝）</h3><span class="sub-number">每月定投</span></div>';
+    html += '<div class="row"><span>余额</span><span style="font-weight:600;">' + money(emergBalance) + '</span></div>';
+    html += '<div class="plan-actions">';
+    html += '<button class="btn btn-primary btn-sm" data-quick="emergency-deposit">存入</button>';
+    html += '<button class="btn btn-outline btn-sm" data-quick="emergency-withdraw">支出</button>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="row"><h3 style="margin:0;">④ 还款储备 + 个人储备（同业基金）</h3><span class="sub-number">结余减去应急金后的部分</span></div>';
+    html += '<div class="row"><span>余额</span><span style="font-weight:600;">' + money(reserveBal) + '</span></div>';
+    html += '<div class="plan-actions">';
+    html += '<button class="btn btn-primary btn-sm" data-quick="reserve">存入</button>';
+    html += '<button class="btn btn-outline btn-sm" data-quick="personal-withdraw">个人支出</button>';
+    html += '<button class="btn btn-outline btn-sm" data-quick="repay">登记还本</button>';
+    html += '</div>';
+    html += '</div>';
+
+    if (state.goals.length) {
+      html += '<div class="section-title"><h2>小目标</h2></div>';
+      state.goals.forEach(function (goal) {
+        var current = goalCurrentAmount(goal);
+        var hasTarget = Number(goal.target) > 0;
+        var pct = hasTarget ? Math.min(100, Math.round((current / goal.target) * 100)) : null;
+        html += '<div class="card plan-card">';
+        html += '<div class="plan-head"><span class="plan-name">' + escapeHtml(goal.name) + '</span>' + (pct != null ? '<span>' + pct + '%</span>' : '') + '</div>';
+        if (pct != null) {
+          html += '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
+          html += '<div class="plan-meta">已存 ' + money(current) + ' / 目标 ' + money(goal.target) + '</div>';
+        } else {
+          html += '<div class="plan-meta">累计已存 ' + money(current) + '</div>';
+        }
+        html += '</div>';
+      });
     }
-    html += '</div>';
-
-    html += '<div class="card">';
-    html += '<h3>本月实际开销（记账）</h3>';
-    html += '<div class="row"><span>已记录支出</span><span>' + money(actualSpend) + '</span></div>';
-    html += '<div class="row"><span>生活开销预算</span><span>' + money(cf.lifeExpense) + '</span></div>';
-    html += '</div>';
 
     html += '<div class="row" style="gap:10px;">';
     html += '<button class="btn btn-primary" style="flex:1;" data-quick="expense">+ 记一笔</button>';
-    html += '<button class="btn btn-outline" style="flex:1;" data-quick="repay">+ 登记还款</button>';
-    html += '<button class="btn btn-outline" style="flex:1;" data-quick="reserve">+ 存入储备</button>';
+    html += '<button class="btn btn-outline" style="flex:1;" data-quick="goal-add">+ 新增小目标</button>';
     html += '</div>';
 
     return html;
@@ -626,6 +664,35 @@
     return sum(state.reserveFund.transactions, function (t) { return t.type === "deposit" ? t.amount : -t.amount; });
   }
 
+  function emergencyBalance() {
+    return sum(state.emergencyFund.transactions, function (t) { return t.type === "deposit" ? t.amount : -t.amount; });
+  }
+
+  function openEmergencyTxModal(type) {
+    var fields = [
+      { key: "date", label: "日期", type: "date", value: todayStr() },
+      { key: "amount", label: "金额", type: "number", value: type === "deposit" ? round2(state.cashFlowParams.emergencyFundMonthly) : "" },
+      { key: "note", label: "备注（可选）", type: "text", value: "" }
+    ];
+    openFormModal({
+      title: type === "deposit" ? "存入应急金" : "应急金支出/调整",
+      fields: fields,
+      submitLabel: "确认",
+      onSubmit: function (v) {
+        var amount = parseFloat(v.amount);
+        if (!v.date || isNaN(amount) || amount <= 0) {
+          toast("请填写正确的日期和金额");
+          return;
+        }
+        state.emergencyFund.transactions.push({ id: uid(), date: v.date, type: type, amount: amount, note: v.note });
+        saveState();
+        closeModal();
+        render();
+        toast("已保存");
+      }
+    });
+  }
+
   function yearActualCumulative(uptoIndex) {
     var total = 0;
     state.repaymentPlan.years.forEach(function (y) {
@@ -641,7 +708,7 @@
     html += '<div class="row"><h3 style="margin:0;">还款储备金余额</h3><span class="big-number" style="font-size:20px;">' + money(reserveBalance()) + '</span></div>';
     html += '<div class="plan-actions">';
     html += '<button class="btn btn-primary btn-sm" id="reserveDepositBtn">存入</button>';
-    html += '<button class="btn btn-outline btn-sm" id="reserveWithdrawBtn">支出/调整</button>';
+    html += '<button class="btn btn-outline btn-sm" id="reserveWithdrawBtn">个人支出</button>';
     html += '<button class="btn btn-outline btn-sm" id="reserveHistoryBtn">流水</button>';
     html += '</div>';
     html += '<div class="history-list" id="reserveHistory" style="display:none;">';
@@ -874,14 +941,16 @@
     html += '<div class="row"><h3 style="margin:0;">现金流参数</h3><button class="link-btn" id="editParamsBtn">编辑参数</button></div>';
     html += '<div class="sub-number">基本工资 ' + money(params.baseSalary) + ' · 交通补贴 ' + money(params.transportPerDay * params.transportDays) + '/月</div>';
     html += '<div class="sub-number">五险 ' + (params.insuranceRate * 100).toFixed(1) + '% · 公积金 ' + (params.housingFundRate * 100).toFixed(1) + '%（' + params.housingFundStartDate + ' 起）</div>';
-    html += '<div class="sub-number">生活开销合计 ' + money(params.lifeExpenseCommute + params.lifeExpenseFood + params.lifeExpenseFamily + params.lifeExpensePersonal) + '/月 · 目标还款年限 ' + state.repaymentPlan.targetYears + ' 年</div>';
-    html += '<div class="sub-number">参考：达成' + state.repaymentPlan.targetYears + '年计划所需的月均储备速度 ' + money(reserveMonthlyTarget()) + '（实际每月全部结余都会存入储备资金池）</div>';
+    html += '<div class="sub-number">生活开销合计 ' + money(params.lifeExpenseCommute + params.lifeExpenseFood + params.lifeExpenseFamily + params.lifeExpensePersonal) + '/月 · 应急金 ' + money(params.emergencyFundMonthly) + '/月 · 目标还款年限 ' + state.repaymentPlan.targetYears + ' 年</div>';
+    html += '<div class="sub-number">参考：达成' + state.repaymentPlan.targetYears + '年计划所需的月均储备速度 ' + money(reserveMonthlyTarget()) + '（应急金存满' + money(params.emergencyFundMonthly) + '后，剩余结余才进储备资金池）</div>';
     html += '</div>';
 
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">' + (cf.confirmed ? '本月工资（已确认）' : '本月测算（估算）') + ' · ' + cf.monthLabel + '</h3><button class="link-btn" id="confirmSalaryBtn">' + (cf.confirmed ? '修改' : '确认工资') + '</button></div>';
     html += '<div class="row"><span>到手工资</span><span>' + money(cf.netPay) + '</span></div>';
-    html += '<div class="row"><span>结余（存入储备资金池）</span><span>' + money(cf.surplus) + '</span></div>';
+    html += '<div class="row"><span>结余</span><span>' + money(cf.surplus) + '</span></div>';
+    html += '<div class="row"><span>→ 应急金（活钱宝）</span><span>' + money(cf.emergencyContribution) + '</span></div>';
+    html += '<div class="row"><span>→ 储备+个人储备（同业基金）</span><span>' + money(cf.reserveContribution) + '</span></div>';
     if (!cf.confirmed) html += '<div class="sub-number">这是按现金流参数估算的数字，实际工资以工资条为准——拿到工资条后点"确认工资"填入实发数额</div>';
     html += '<button class="btn btn-primary btn-block" id="registerMonthBtn" style="margin-top:10px;">登记本月存入</button>';
     html += '</div>';
@@ -889,7 +958,7 @@
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">未来6个月测算</h3><button class="link-btn" id="toggleSalaryHistory">工资记录</button></div>';
     series.forEach(function (r) {
-      html += '<div class="row"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 结余 ' + money(r.surplus) + '</span></div>';
+      html += '<div class="row"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 应急 ' + money(r.emergencyContribution) + ' · 储备 ' + money(r.reserveContribution) + '</span></div>';
     });
     html += '<div class="history-list" id="salaryHistory" style="display:none;">';
     if (!state.salaryRecords.length) {
@@ -902,7 +971,7 @@
     html += '</div>';
     html += '</div>';
 
-    html += '<div class="section-title"><h2>理财 / 储蓄目标</h2></div>';
+    html += '<div class="section-title"><h2>小目标</h2></div>';
     if (!state.goals.length) {
       html += '<div class="card empty-state">暂无理财目标，点击下方按钮新增</div>';
     } else {
@@ -1020,6 +1089,7 @@
       { key: "lifeExpenseFood", label: "生活开销-伙食(元/月)", type: "number", value: p.lifeExpenseFood },
       { key: "lifeExpenseFamily", label: "生活开销-给家里(元/月)", type: "number", value: p.lifeExpenseFamily },
       { key: "lifeExpensePersonal", label: "生活开销-个人日常(元/月)", type: "number", value: p.lifeExpensePersonal },
+      { key: "emergencyFundMonthly", label: "应急金每月定投(元，活钱宝)", type: "number", value: p.emergencyFundMonthly },
       { key: "targetYears", label: "目标还款年限(年)", type: "number", value: state.repaymentPlan.targetYears },
       { key: "reserveMonthlyOverride", label: "每月还款储备目标（留空则自动=总本金/年限/12）", type: "number", value: p.reserveMonthlyOverride != null ? p.reserveMonthlyOverride : "" }
     ];
@@ -1041,6 +1111,7 @@
         p.lifeExpenseFood = parseFloat(v.lifeExpenseFood) || 0;
         p.lifeExpenseFamily = parseFloat(v.lifeExpenseFamily) || 0;
         p.lifeExpensePersonal = parseFloat(v.lifeExpensePersonal) || 0;
+        p.emergencyFundMonthly = parseFloat(v.emergencyFundMonthly) || 0;
         var ty = parseInt(v.targetYears, 10);
         if (ty > 0 && ty !== state.repaymentPlan.targetYears) {
           state.repaymentPlan.targetYears = ty;
@@ -1168,6 +1239,10 @@
             if (activeYear) openYearPaymentModal(activeYear);
           }
           if (type === "reserve") openReserveTxModal("deposit");
+          if (type === "personal-withdraw") openReserveTxModal("withdraw");
+          if (type === "emergency-deposit") openEmergencyTxModal("deposit");
+          if (type === "emergency-withdraw") openEmergencyTxModal("withdraw");
+          if (type === "goal-add") openGoalModal(null);
         });
       });
       var icsBtn = document.getElementById("exportIcsBtn");
@@ -1279,12 +1354,16 @@
           title: "登记本月存入 · " + cf.monthLabel,
           fields: [
             { key: "date", label: "日期", type: "date", value: todayStr() },
-            { key: "amount", label: "存入还款储备资金池", type: "number", value: cf.surplus }
+            { key: "emergencyAmount", label: "存入应急金（活钱宝）", type: "number", value: cf.emergencyContribution },
+            { key: "reserveAmount", label: "存入还款储备+个人储备（同业基金）", type: "number", value: cf.reserveContribution }
           ],
           submitLabel: "确认登记",
           onSubmit: function (v) {
-            var amount = parseFloat(v.amount) || 0;
-            if (amount > 0) state.reserveFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: amount, note: cf.monthLabel + (cf.confirmed ? " 实际结余" : " 现金流测算") });
+            var e = parseFloat(v.emergencyAmount) || 0;
+            var r = parseFloat(v.reserveAmount) || 0;
+            var note = cf.monthLabel + (cf.confirmed ? " 实际结余" : " 现金流测算");
+            if (e > 0) state.emergencyFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: e, note: note });
+            if (r > 0) state.reserveFund.transactions.push({ id: uid(), date: v.date, type: "deposit", amount: r, note: note });
             saveState();
             closeModal();
             render();
