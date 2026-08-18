@@ -1164,6 +1164,8 @@
 
     html += '<div class="card">';
     html += '<h3>危险操作</h3>';
+    html += '<button class="btn btn-danger btn-block" id="resetFundsBtn" style="margin-bottom:10px;">重置储备金/应急金流水+还本记录</button>';
+    html += '<div class="sub-number" style="margin-bottom:10px;">只清空存取流水和还本记录，贷款合同、现金流参数、小目标、记账都不受影响</div>';
     html += '<button class="btn btn-danger btn-block" id="clearAllBtn">清空所有数据</button>';
     html += '</div>';
 
@@ -1431,6 +1433,16 @@
             render();
           }
         });
+      });
+      document.getElementById("resetFundsBtn").addEventListener("click", function () {
+        if (confirmAction("将清空还款储备金流水、应急金流水、以及每年的实际还本记录，且无法恢复。贷款合同/现金流参数/小目标/记账不受影响。确定重置吗？")) {
+          state.reserveFund.transactions = [];
+          state.emergencyFund.transactions = [];
+          state.repaymentPlan.years.forEach(function (y) { y.actualPayments = []; });
+          saveState();
+          render();
+          toast("已重置");
+        }
       });
       document.getElementById("clearAllBtn").addEventListener("click", function () {
         if (confirmAction("将清空全部开销、还款、理财数据，且无法恢复。建议先导出备份。确定清空吗？")) {
