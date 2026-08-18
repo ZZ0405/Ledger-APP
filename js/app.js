@@ -1240,6 +1240,15 @@
   /* ---------------- More / Backup ---------------- */
   function renderMore() {
     var html = "";
+
+    if (deferredInstallPrompt) {
+      html += '<div class="card">';
+      html += '<h3>安装到主屏幕</h3>';
+      html += '<div class="sub-number">点这个按钮安装的是真正的App体验（全屏无地址栏），比浏览器菜单里的"添加到桌面"更可靠</div>';
+      html += '<button class="btn btn-primary btn-block" id="installAppBtn" style="margin-top:10px;">立即安装</button>';
+      html += '</div>';
+    }
+
     html += '<div class="card">';
     html += '<h3>数据备份</h3>';
     html += '<div class="row"><span>导出全部数据（JSON）</span><button class="btn btn-outline btn-sm" id="exportJsonBtn">导出</button></div>';
@@ -1542,6 +1551,17 @@
     }
 
     if (page === "more") {
+      var installBtn = document.getElementById("installAppBtn");
+      if (installBtn) {
+        installBtn.addEventListener("click", function () {
+          if (!deferredInstallPrompt) return;
+          deferredInstallPrompt.prompt();
+          deferredInstallPrompt.userChoice.then(function () {
+            deferredInstallPrompt = null;
+            render();
+          });
+        });
+      }
       document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
       document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
       var icsBtn2 = document.getElementById("exportIcsBtn2");
@@ -1600,6 +1620,18 @@
 
   document.querySelectorAll(".nav-btn").forEach(function (btn) {
     btn.addEventListener("click", function () { navigate(btn.dataset.page); });
+  });
+
+  /* ---------------- Install prompt ---------------- */
+  var deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (currentPage === "more") render();
+  });
+  window.addEventListener("appinstalled", function () {
+    deferredInstallPrompt = null;
+    if (currentPage === "more") render();
   });
 
   /* ---------------- Init ---------------- */
