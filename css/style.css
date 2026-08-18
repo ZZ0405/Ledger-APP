@@ -154,6 +154,13 @@ body{
 
 .history-list{margin-top:10px;border-top:1px dashed var(--border);padding-top:8px;}
 .history-list .hrow{display:flex;justify-content:space-between;font-size:12px;color:var(--text-dim);padding:3px 0;}
+.hrow.payslip-row{align-items:center;gap:8px;}
+.payslip-info{flex:1;display:flex;justify-content:space-between;}
+.payslip-thumb{
+  width:34px;height:34px;border-radius:8px;object-fit:cover;flex:0 0 auto;
+  border:1px solid var(--border);cursor:pointer;background:#f0f0f0;
+}
+.payslip-thumb-loading{background:linear-gradient(90deg,#eee,#f5f5f5,#eee);}
 
 /* Modal */
 .modal-overlay{
