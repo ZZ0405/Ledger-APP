@@ -190,6 +190,106 @@
     return sum(state.loanContracts, function (c) { return c.principal; });
   }
 
+  /* ---------------- Payslip photos (IndexedDB) ---------------- */
+  var payslipCache = null;
+
+  function openFilesDB() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open("ledgerAppFilesV1", 1);
+      req.onupgradeneeded = function () {
+        req.result.createObjectStore("payslips", { keyPath: "id" });
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function savePayslip(record) {
+    return openFilesDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction("payslips", "readwrite");
+        tx.objectStore("payslips").put(record);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function deletePayslip(id) {
+    return openFilesDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction("payslips", "readwrite");
+        tx.objectStore("payslips").delete(id);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function getAllPayslips() {
+    return openFilesDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction("payslips", "readonly");
+        var req = tx.objectStore("payslips").getAll();
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+
+  function ensurePayslipCache(onFreshLoad) {
+    // onFreshLoad fires only the first time the cache is populated, never on
+    // subsequent calls once it's warm — callers use it to trigger a one-off re-render.
+    if (payslipCache) return;
+    getAllPayslips().then(function (list) {
+      payslipCache = {};
+      list.forEach(function (p) { payslipCache[p.id] = p.dataUrl; });
+      onFreshLoad();
+    }).catch(function () {
+      payslipCache = {};
+      onFreshLoad();
+    });
+  }
+
+  function compressImageToDataUrl(file, maxDim, quality) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var w = img.width, h = img.height;
+          var scale = Math.min(1, maxDim / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * scale));
+          var ch = Math.max(1, Math.round(h * scale));
+          var canvas = document.createElement("canvas");
+          canvas.width = cw;
+          canvas.height = ch;
+          canvas.getContext("2d").drawImage(img, 0, 0, cw, ch);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = function () { reject(new Error("图片加载失败")); };
+        img.src = reader.result;
+      };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openImageLightbox(dataUrl) {
+    var root = document.getElementById("modalRoot");
+    root.innerHTML =
+      '<div class="modal-overlay center" id="modalOverlay">' +
+      '<div class="modal" style="padding:10px;max-height:90vh;">' +
+      '<div class="modal-header"><h3>工资条</h3><button type="button" class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+      '<img src="' + dataUrl + '" style="width:100%;border-radius:10px;display:block;">' +
+      "</div>" +
+      "</div>";
+    document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+    document.getElementById("modalOverlay").addEventListener("click", function (e) {
+      if (e.target.id === "modalOverlay") closeModal();
+    });
+  }
+
   /* ---------------- Tax / cash-flow engine ---------------- */
   function findBracket(cumulativeTaxable) {
     var picked = TAX_BRACKETS[0];
@@ -303,6 +403,9 @@
     }
     if (f.type === "textarea") {
       return '<div class="form-field">' + label + '<textarea name="' + f.key + '" placeholder="' + escapeHtml(f.placeholder || "") + '">' + escapeHtml(val) + "</textarea></div>";
+    }
+    if (f.type === "file") {
+      return '<div class="form-field">' + label + '<input type="file" name="' + f.key + '" accept="image/*">' + (f.hint ? '<div class="sub-number">' + escapeHtml(f.hint) + "</div>" : "") + "</div>";
     }
     var type = f.type || "text";
     var step = type === "number" ? ' step="0.01" inputmode="decimal"' : "";
@@ -965,7 +1068,15 @@
       html += '<div class="hrow"><span>暂无确认记录</span></div>';
     } else {
       state.salaryRecords.slice().sort(function (a, b) { return b.month.localeCompare(a.month); }).forEach(function (r) {
-        html += '<div class="hrow"><span>' + r.month + (r.note ? " · " + escapeHtml(r.note) : "") + '</span><span>' + money(r.actualNetPay) + '</span></div>';
+        var thumbUrl = (r.payslipId && payslipCache && payslipCache[r.payslipId]) ? payslipCache[r.payslipId] : null;
+        html += '<div class="hrow payslip-row">';
+        if (thumbUrl) {
+          html += '<img src="' + thumbUrl + '" class="payslip-thumb" data-payslip-view="' + r.payslipId + '">';
+        } else if (r.payslipId) {
+          html += '<span class="payslip-thumb payslip-thumb-loading"></span>';
+        }
+        html += '<span class="payslip-info"><span>' + r.month + (r.note ? " · " + escapeHtml(r.note) : "") + '</span><span>' + money(r.actualNetPay) + '</span></span>';
+        html += '</div>';
       });
     }
     html += '</div>';
@@ -1310,6 +1421,14 @@
     }
 
     if (page === "goals") {
+      ensurePayslipCache(function () {
+        if (currentPage === "goals") render();
+      });
+      document.querySelectorAll("[data-payslip-view]").forEach(function (img) {
+        img.addEventListener("click", function () {
+          openImageLightbox(img.getAttribute("src"));
+        });
+      });
       document.getElementById("editParamsBtn").addEventListener("click", openCashFlowParamsModal);
       document.getElementById("confirmSalaryBtn").addEventListener("click", function () {
         var now = new Date();
@@ -1319,13 +1438,18 @@
           title: "确认本月工资 · " + monthLabel(mKey),
           fields: [
             { key: "actualNetPay", label: "本月实发工资（工资条上的实发数额）", type: "number", value: existing ? existing.actualNetPay : "" },
-            { key: "note", label: "备注（可选）", type: "text", value: existing ? existing.note : "" }
+            { key: "note", label: "备注（可选）", type: "text", value: existing ? existing.note : "" },
+            { key: "payslipPhoto", label: existing && existing.payslipId ? "工资条截图（已上传，选新的可替换）" : "工资条截图（可选）", type: "file" }
           ],
           submitLabel: "保存",
           showDelete: !!existing,
           onDelete: function () {
             state.salaryRecords = state.salaryRecords.filter(function (r) { return r.month !== mKey; });
             saveState();
+            if (existing && existing.payslipId) {
+              deletePayslip(existing.payslipId).catch(function () {});
+              payslipCache = null;
+            }
             closeModal();
             render();
             toast("已删除，改回按测算值显示");
@@ -1333,16 +1457,35 @@
           onSubmit: function (v) {
             var amount = parseFloat(v.actualNetPay);
             if (isNaN(amount) || amount <= 0) { toast("请填写正确的实发工资"); return; }
-            if (existing) {
-              existing.actualNetPay = amount;
-              existing.note = v.note;
-            } else {
-              state.salaryRecords.push({ id: uid(), month: mKey, actualNetPay: amount, note: v.note });
-            }
-            saveState();
-            closeModal();
-            render();
-            toast("已确认本月工资");
+            var photoFile = v.payslipPhoto;
+            var savePhoto = (photoFile && photoFile.size > 0)
+              ? compressImageToDataUrl(photoFile, 1280, 0.72)
+              : Promise.resolve(null);
+            savePhoto.then(function (dataUrl) {
+              var payslipId = existing ? existing.payslipId : null;
+              if (dataUrl) {
+                payslipId = payslipId || uid();
+                return savePayslip({ id: payslipId, month: mKey, dataUrl: dataUrl, createdAt: todayStr() }).then(function () {
+                  payslipCache = null;
+                  return payslipId;
+                });
+              }
+              return payslipId;
+            }).then(function (payslipId) {
+              if (existing) {
+                existing.actualNetPay = amount;
+                existing.note = v.note;
+                if (payslipId) existing.payslipId = payslipId;
+              } else {
+                state.salaryRecords.push({ id: uid(), month: mKey, actualNetPay: amount, note: v.note, payslipId: payslipId });
+              }
+              saveState();
+              closeModal();
+              render();
+              toast("已确认本月工资");
+            }).catch(function () {
+              toast("工资条图片保存失败，请重试");
+            });
           }
         });
       });
