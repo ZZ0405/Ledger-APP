@@ -1,4 +1,4 @@
-var CACHE_NAME = "ledger-cache-v2";
+var CACHE_NAME = "ledger-cache-v3";
 var ASSETS = [
   "./",
   "./index.html",
@@ -28,8 +28,13 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
+  // "reload" forces a real conditional/full network request, bypassing the
+  // browser's own heuristic HTTP cache — without this, fetch() here can
+  // silently return a stale cached response even though this handler is
+  // "network-first" from the service worker's point of view.
+  var freshRequest = new Request(event.request.url, { cache: "reload" });
   event.respondWith(
-    fetch(event.request).then(function (response) {
+    fetch(freshRequest).then(function (response) {
       if (response && response.status === 200) {
         var clone = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(event.request, clone); });
