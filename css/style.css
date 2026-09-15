@@ -9,6 +9,21 @@
   --danger:#dc2626;
   --border:#e5e7eb;
   --radius:14px;
+
+  /* categorical palette — validated for CVD-safety + contrast, see dataviz skill */
+  --c-life:#2a78d6;
+  --c-pension:#eb6834;
+  --c-interest:#1baf7a;
+  --c-emergency:#eda100;
+  --c-invest:#e87ba4;
+  --c-buffer:#c3c2b7;
+
+  --status-good:#0ca30c;
+  --status-good-bg:#e3f7e3;
+  --status-warning:#fab219;
+  --status-warning-bg:#fff4dd;
+  --status-critical:#d03b3b;
+  --status-critical-bg:#fbe4e4;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;height:100%;}
@@ -31,7 +46,7 @@ body{
 }
 .topbar{
   padding:calc(env(safe-area-inset-top,0px) + 14px) 18px 14px;
-  background:var(--teal);
+  background:linear-gradient(135deg,var(--teal) 0%,var(--teal-dark) 100%);
   color:#fff;
   flex:0 0 auto;
 }
@@ -59,9 +74,17 @@ body{
   color:var(--text-dim);
   font-size:11px;
   cursor:pointer;
+  transition:color .15s ease;
 }
-.nav-btn .nav-icon{font-size:20px;line-height:1;}
+.nav-btn .nav-icon{font-size:20px;line-height:1;display:inline-block;transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
 .nav-btn.active{color:var(--teal-dark);font-weight:600;}
+.nav-btn.active .nav-icon{transform:scale(1.15) translateY(-1px);}
+
+@keyframes cardIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+@media (prefers-reduced-motion: reduce){
+  .card{animation:none !important;}
+  .nav-btn .nav-icon{transition:none;}
+}
 
 .card{
   background:var(--card);
@@ -69,8 +92,38 @@ body{
   padding:16px;
   margin-bottom:12px;
   box-shadow:0 1px 3px rgba(0,0,0,0.06);
+  animation:cardIn .3s ease both;
+  border-left:3px solid transparent;
 }
 .card h3{margin:0 0 10px;font-size:15px;color:var(--text-dim);font-weight:600;}
+.fund-card{border-left-width:3px;border-left-style:solid;}
+
+.greeting-banner{
+  background:linear-gradient(135deg,var(--teal) 0%,#0891b2 100%);
+  color:#fff;border-radius:var(--radius);padding:18px 16px;margin-bottom:12px;
+  animation:cardIn .3s ease both;
+}
+.greeting-title{font-size:17px;font-weight:700;}
+.greeting-sub{font-size:12px;opacity:.9;margin-top:4px;}
+
+.status-badge{
+  display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;
+  background:#eef2f2;color:var(--text-dim);vertical-align:middle;
+}
+.status-good{background:var(--status-good-bg);color:var(--status-good);}
+.status-warning{background:var(--status-warning-bg);color:#92660a;}
+.status-critical{background:var(--status-critical-bg);color:var(--status-critical);}
+
+.alloc-bar{
+  display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef0f0;margin:10px 0 8px;
+}
+.alloc-seg{height:100%;transition:width .4s ease;border-right:2px solid var(--card);}
+.alloc-seg:last-child{border-right:none;}
+.alloc-seg-buffer{background:var(--c-buffer);}
+.alloc-legend{display:flex;flex-wrap:wrap;gap:6px 12px;}
+.alloc-legend-item{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;}
+.alloc-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto;}
+.alloc-dot-buffer{background:var(--c-buffer);}
 .big-number{font-size:28px;font-weight:700;color:var(--text);}
 .sub-number{font-size:12px;color:var(--text-dim);margin-top:2px;}
 
@@ -133,7 +186,9 @@ body{
   font-size:26px;box-shadow:0 4px 10px rgba(13,148,136,0.4);
   cursor:pointer;z-index:15;
   display:flex;align-items:center;justify-content:center;
+  transition:transform .12s ease;
 }
+.fab:active{transform:scale(.92);}
 
 .empty-state{
   text-align:center;color:var(--text-dim);padding:40px 10px;font-size:13px;
@@ -145,6 +200,12 @@ body{
 .plan-card .plan-actions{display:flex;gap:8px;margin-top:12px;}
 .btn{
   border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:600;
+  transition:transform .1s ease,opacity .1s ease;
+}
+.btn:active{transform:scale(.96);opacity:.9;}
+@media (prefers-reduced-motion: reduce){
+  .btn{transition:none;}
+  .btn:active{transform:none;}
 }
 .btn-primary{background:var(--teal);color:#fff;}
 .btn-outline{background:#fff;border:1px solid var(--border);color:var(--text);}
