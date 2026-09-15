@@ -198,6 +198,28 @@
     return { status: "glide", dueYear: dueYear, startYear: startYear, yearIndex: yearIndex };
   }
 
+  /* ---------------- Expense category colors ---------------- */
+  // Assigned by each category's stable position in state.categories, cycling
+  // through the validated 8-hue categorical set; anything past slot 8 (by
+  // default that's "其他") falls back to neutral gray, per the "Other" rule.
+  var CATEGORY_TAG_COLORS = [
+    { bg: "#dbeafe", text: "#1e40af" },
+    { bg: "#ffe4d5", text: "#c2410c" },
+    { bg: "#d1fae5", text: "#047857" },
+    { bg: "#fef3c7", text: "#92400e" },
+    { bg: "#fce7f3", text: "#be185d" },
+    { bg: "#dcfce7", text: "#15803d" },
+    { bg: "#ede9fe", text: "#5b21b6" },
+    { bg: "#fee2e2", text: "#b91c1c" }
+  ];
+  var CATEGORY_NEUTRAL = { bg: "#eef2f2", text: "#52514e" };
+
+  function categoryColor(name) {
+    var idx = state.categories.indexOf(name);
+    if (idx < 0 || idx >= CATEGORY_TAG_COLORS.length) return CATEGORY_NEUTRAL;
+    return CATEGORY_TAG_COLORS[idx];
+  }
+
   /* ---------------- Allocation visualization ---------------- */
   var ALLOC_BUCKETS = [
     { key: "life", label: "生活开销", emoji: "🍜", color: "var(--c-life)" },
@@ -823,24 +845,30 @@
 
     html += '<div class="card"><h3>本月合计</h3><div class="big-number">' + money(total) + '</div></div>';
 
-    if (expenseMonth === monthKey(todayStr())) {
-      var budget = state.cashFlowParams.lifeExpenseCommute + state.cashFlowParams.lifeExpenseFood + state.cashFlowParams.lifeExpenseFamily + state.cashFlowParams.lifeExpensePersonal;
-      if (budget > 0) {
-        var budgetPct = Math.round((total / budget) * 100);
-        var over = total > budget;
-        html += '<div class="card">';
-        html += '<h3>本月开销 vs 预算</h3>';
-        html += '<div class="progress-track"><div class="progress-fill' + (over ? ' over' : '') + '" style="width:' + Math.min(100, budgetPct) + '%"></div></div>';
-        html += '<div class="sub-number" style="' + (over ? 'color:var(--danger);font-weight:600;' : '') + '">已花 ' + money(total) + ' / 预算 ' + money(budget) + '（' + budgetPct + '%）' + (over ? ' · 已超支 ' + money(total - budget) : '') + '</div>';
-        html += '</div>';
-      }
+    var isCurrentMonth = expenseMonth === monthKey(todayStr());
+    var budget = state.cashFlowParams.lifeExpenseCommute + state.cashFlowParams.lifeExpenseFood + state.cashFlowParams.lifeExpenseFamily + state.cashFlowParams.lifeExpensePersonal;
+    if (budget > 0) {
+      var budgetPct = Math.round((total / budget) * 100);
+      var over = total > budget;
+      html += '<div class="card">';
+      html += '<h3>' + (isCurrentMonth ? '本月开销 vs 预算' : '开销 vs 预算') + '</h3>';
+      html += '<div class="progress-track"><div class="progress-fill' + (over ? ' over' : '') + '" style="width:' + Math.min(100, budgetPct) + '%"></div></div>';
+      html += '<div class="sub-number" style="' + (over ? 'color:var(--danger);font-weight:600;' : '') + '">已花 ' + money(total) + ' / 预算 ' + money(budget) + '（' + budgetPct + '%）' + (over ? ' · 已超支 ' + money(total - budget) : '') + '</div>';
+      if (!isCurrentMonth) html += '<div class="sub-number">按当前设置的预算金额对比，不代表当时的预算</div>';
+      html += '</div>';
     }
 
     if (catKeys.length) {
       html += '<div class="card"><h3>分类占比</h3>';
       catKeys.forEach(function (c) {
         var pct = maxCat > 0 ? (byCat[c] / maxCat) * 100 : 0;
-        html += '<div class="bar-row"><span class="bar-label">' + escapeHtml(c) + '</span><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span class="bar-amount">' + money(byCat[c]) + '</span></div>';
+        var sharePct = total > 0 ? Math.round((byCat[c] / total) * 100) : 0;
+        var cColor = categoryColor(c);
+        html += '<div class="bar-row">';
+        html += '<span class="bar-label">' + escapeHtml(c) + '</span>';
+        html += '<span class="bar-track"><span class="bar-fill" style="width:' + pct + '%;background:' + cColor.text + ';"></span><span class="bar-pct">' + sharePct + '%</span></span>';
+        html += '<span class="bar-amount">' + money(byCat[c]) + '</span>';
+        html += '</div>';
       });
       html += '</div>';
     }
@@ -857,7 +885,8 @@
           lastDate = x.date;
         }
         html += '<div class="expense-item" data-exp-id="' + x.id + '">';
-        html += '<div class="exp-main"><span><span class="cat-tag">' + escapeHtml(x.category) + '</span></span>';
+        var xCatColor = categoryColor(x.category);
+        html += '<div class="exp-main"><span><span class="cat-tag" style="background:' + xCatColor.bg + ';color:' + xCatColor.text + ';">' + escapeHtml(x.category) + '</span></span>';
         if (x.note) html += '<span class="exp-note">' + escapeHtml(x.note) + '</span>';
         html += '</div>';
         html += '<span class="exp-amount">' + money(x.amount) + '</span>';
@@ -1432,7 +1461,8 @@
 
     html += '<div class="card">';
     html += '<h3>👋 个性化</h3>';
-    html += '<div class="form-field" style="margin-bottom:0;"><label>昵称（首页问候语用，可留空）</label><input type="text" id="nicknameInput" value="' + escapeHtml(state.nickname || "") + '" placeholder="怎么称呼你"></div>';
+    html += '<div class="form-field"><label>昵称（首页问候语用，可留空）</label><input type="text" id="nicknameInput" value="' + escapeHtml(state.nickname || "") + '" placeholder="怎么称呼你"></div>';
+    html += '<div class="form-field" style="margin-bottom:0;"><label>实际开始使用日期（用于首页"第几天"计数）</label><input type="date" id="firstUseDateInput" value="' + escapeHtml(state.firstUseDate || todayStr()) + '"></div>';
     html += '<div class="sub-number" style="margin-top:6px;">已经用了 ' + daysSinceFirstUse() + ' 天</div>';
     html += '</div>';
 
@@ -1458,7 +1488,8 @@
     html += '<h3>开销分类管理</h3>';
     html += '<div class="chip-row" id="categoryChips">';
     state.categories.forEach(function (c) {
-      html += '<span class="chip" data-cat="' + escapeHtml(c) + '">' + escapeHtml(c) + ' ✕</span>';
+      var cColor = categoryColor(c);
+      html += '<span class="chip" data-cat="' + escapeHtml(c) + '" style="background:' + cColor.bg + ';color:' + cColor.text + ';border-color:transparent;">' + escapeHtml(c) + ' ✕</span>';
     });
     html += '</div>';
     html += '<div class="row" style="margin-top:12px;"><button class="btn btn-outline btn-block" id="addCategoryBtn">+ 新增分类</button></div>';
@@ -1693,6 +1724,12 @@
       document.getElementById("nicknameInput").addEventListener("change", function (e) {
         state.nickname = e.target.value.trim();
         saveState();
+      });
+      document.getElementById("firstUseDateInput").addEventListener("change", function (e) {
+        if (!e.target.value) return;
+        state.firstUseDate = e.target.value;
+        saveState();
+        render();
       });
       var installBtn = document.getElementById("installAppBtn");
       if (installBtn) {
