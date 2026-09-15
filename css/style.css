@@ -156,8 +156,14 @@ body{
 
 .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;}
 .bar-row .bar-label{width:52px;flex:0 0 auto;color:var(--text-dim);}
-.bar-row .bar-track{flex:1;height:14px;background:#eef2f2;border-radius:7px;overflow:hidden;}
-.bar-row .bar-fill{height:100%;background:var(--teal);border-radius:7px;}
+.bar-row .bar-track{position:relative;flex:1;height:18px;background:#eef2f2;border-radius:9px;overflow:hidden;}
+.bar-row .bar-fill{display:block;height:100%;background:var(--teal);border-radius:9px;transition:width .4s ease;}
+.bar-row .bar-pct{
+  position:absolute;top:50%;right:6px;transform:translateY(-50%);
+  font-size:10px;font-weight:700;color:#fff;
+  text-shadow:0 0 2px rgba(0,0,0,.55),0 0 4px rgba(0,0,0,.4);
+  font-variant-numeric:tabular-nums;pointer-events:none;
+}
 .bar-row .bar-amount{width:70px;flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums;}
 
 .expense-item, .list-item{
