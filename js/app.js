@@ -323,7 +323,7 @@
       for (var m = 0; m < 12; m++) monthAmts.push(expensesTotalForMonth(y + "-" + String(m + 1).padStart(2, "0")));
       var maxMonthAmt = Math.max.apply(null, monthAmts.concat([0.01]));
       html += '<div class="cal-nav"><button data-cal-nav="-1">&lsaquo;</button><span class="cal-period-label">' + periodLabel + '</span><button data-cal-nav="1">&rsaquo;</button></div>';
-      html += '<div class="cal-bars">';
+      html += '<div class="cal-bars cal-bars-year">';
       monthAmts.forEach(function (amt, idx) {
         var mKeyStr = y + "-" + String(idx + 1).padStart(2, "0");
         var isCurrent = mKeyStr === monthKey(todayStr());
