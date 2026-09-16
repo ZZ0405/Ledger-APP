@@ -266,3 +266,34 @@ body{
   background:rgba(31,41,55,0.92);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;
   box-shadow:0 3px 10px rgba(0,0,0,0.2);
 }
+
+/* ---- Home calendar dashboard ---- */
+.cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.cal-view-switch{display:flex;background:#eef2f2;border-radius:10px;padding:3px;gap:2px;}
+.cal-view-btn{
+  border:none;background:none;padding:5px 12px;border-radius:8px;font-size:13px;color:var(--text-dim);cursor:pointer;
+}
+.cal-view-btn.active{background:#fff;color:var(--teal-dark);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.12);}
+.cal-nav{display:flex;justify-content:center;align-items:center;gap:16px;margin-bottom:10px;}
+.cal-nav button{border:none;background:#eef2f2;width:28px;height:28px;border-radius:50%;font-size:16px;color:var(--text);cursor:pointer;line-height:1;}
+.cal-period-label{font-size:14px;font-weight:600;min-width:96px;text-align:center;}
+
+.cal-bars{display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 2px;}
+.cal-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer;}
+.cal-bar-amt{font-size:10px;color:var(--text-dim);margin-bottom:3px;min-height:12px;}
+.cal-bar{width:100%;max-width:26px;background:#eef2f2;border-radius:6px 6px 3px 3px;transition:height .3s ease;}
+.cal-bar.has-spend{background:var(--c-invest);}
+.cal-bar.is-today{background:var(--teal);}
+.cal-bar-label{font-size:11px;color:var(--text-dim);margin-top:6px;}
+.cal-bar-label.is-today{color:var(--teal-dark);font-weight:600;}
+
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-weekday{text-align:center;font-size:11px;color:var(--text-dim);padding-bottom:4px;}
+.cal-day{
+  aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:12px;cursor:pointer;position:relative;
+}
+.cal-day.empty{cursor:default;}
+.cal-day span:first-child{color:var(--text);}
+.cal-day.is-today{box-shadow:0 0 0 2px var(--teal) inset;font-weight:700;}
+.cal-day-amt{font-size:9px;color:var(--teal-dark);margin-top:1px;font-variant-numeric:tabular-nums;}
