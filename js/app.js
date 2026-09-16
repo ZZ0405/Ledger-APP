@@ -127,7 +127,7 @@
 
   function money(n) {
     n = Number(n) || 0;
-    return "¥" + n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '<span class="cur-sym">¥</span>' + n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function todayStr() {
@@ -269,6 +269,8 @@
   /* ---------------- Home spending calendar ---------------- */
   var homeCalView = "month"; // "week" | "month" | "year"
   var homeCalAnchor = new Date();
+  var homeKeyDatesExpanded = false;
+  var homeLoanNoteExpanded = false;
 
   function expensesTotalForDate(dateStr) {
     return sum(state.expenses.filter(function (x) { return x.date === dateStr; }), function (x) { return x.amount; });
@@ -938,7 +940,7 @@
     var emergBal = emergencyBalance();
     var emergTarget = Number(state.cashFlowParams.emergencyFundTarget) || 0;
 
-    var upcoming = upcomingKeyDates().slice(0, 3);
+    var upcoming = upcomingKeyDates();
 
     var unpaidLoans = state.loanContracts.filter(function (c) { return !c.payoff; });
     var nextDue = unpaidLoans.slice().sort(function (a, b) { return (a.dueDate || "").localeCompare(b.dueDate || ""); })[0];
@@ -948,14 +950,20 @@
     html += renderGreeting();
     html += renderHomeCalendarCard();
 
+    var kdVisible = homeKeyDatesExpanded ? upcoming : upcoming.slice(0, 2);
+    var kdHidden = upcoming.length - kdVisible.length;
+
     html += '<div class="card">';
     html += '<h3>📅 关键日期</h3>';
     if (!upcoming.length) {
       html += '<div class="empty-state">暂无提醒</div>';
     }
-    upcoming.forEach(function (u) {
-      html += '<div class="row"><span>' + escapeHtml(u.kd.name) + ' · ' + fmtDate(u.next) + '</span><span style="font-weight:600;color:' + (u.days <= 14 ? "var(--danger)" : "var(--teal-dark)") + ';">' + (u.days === 0 ? "今天" : u.days + " 天后") + '</span></div>';
+    kdVisible.forEach(function (u) {
+      html += '<div class="row"><span>' + escapeHtml(u.kd.name) + ' · ' + fmtDate(u.next) + '</span><span style="font-weight:700;font-size:15px;color:' + (u.days <= 14 ? "var(--danger)" : "var(--teal-dark)") + ';">' + (u.days === 0 ? "今天" : u.days + " 天后") + '</span></div>';
     });
+    if (kdHidden > 0 || homeKeyDatesExpanded) {
+      html += '<button type="button" class="collapse-toggle" id="kdToggleBtn">' + (homeKeyDatesExpanded ? '收起' : '展开更多 (' + kdHidden + ')') + '<span class="collapse-caret' + (homeKeyDatesExpanded ? ' open' : '') + '">▾</span></button>';
+    }
     html += '<div class="row" style="margin-top:10px;"><button class="btn btn-outline btn-sm btn-block" id="exportIcsBtn">导出到手机日历（可靠提醒）</button></div>';
     html += '</div>';
 
@@ -966,20 +974,26 @@
     } else if (!unpaidLoans.length) {
       html += '<div class="sub-number">🎉 全部 ' + state.loanContracts.length + ' 笔贷款已结清</div>';
     } else {
-      html += '<div class="sub-number">已结清 ' + (state.loanContracts.length - unpaidLoans.length) + ' / ' + state.loanContracts.length + ' 笔 · 剩余本金 ' + money(sum(unpaidLoans, function (c) { return c.principal; })) + '</div>';
+      html += '<div class="row"><span class="sub-number" style="margin-top:0;">剩余本金（已结清 ' + (state.loanContracts.length - unpaidLoans.length) + ' / ' + state.loanContracts.length + ' 笔）</span></div>';
+      html += '<div class="big-number">' + money(sum(unpaidLoans, function (c) { return c.principal; })) + '</div>';
       if (nextDue) {
         var g = loanGlideStatus(nextDue);
-        html += '<div class="row"><span>最近到期：' + escapeHtml(nextDue.term) + '</span><span style="font-weight:600;">' + nextDue.dueDate + '</span></div>';
-        if (g.status === "glide") html += '<div class="sub-number">转现金计划进行中（第 ' + g.yearIndex + '/3 年），详情见"还款"页</div>';
-        else if (g.status === "pending") html += '<div class="sub-number">' + g.yearsToStart + ' 年后启动转现金计划，详情见"还款"页</div>';
-        else if (g.status === "due") html += '<div class="sub-number" style="color:var(--danger);font-weight:600;">已到期，请尽快结清</div>';
+        html += '<div class="row" style="margin-top:12px;"><span>最近到期：' + escapeHtml(nextDue.term) + '</span><span style="font-weight:700;font-size:15px;color:var(--text);">' + nextDue.dueDate + '</span></div>';
+        var glideNote = "";
+        if (g.status === "glide") glideNote = '转现金计划进行中（第 ' + g.yearIndex + '/3 年），详情见"还款"页';
+        else if (g.status === "pending") glideNote = g.yearsToStart + ' 年后启动转现金计划，详情见"还款"页';
+        else if (g.status === "due") glideNote = '已到期，请尽快结清';
+        if (glideNote) {
+          html += '<button type="button" class="collapse-toggle" id="loanNoteToggleBtn">' + (homeLoanNoteExpanded ? '收起说明' : '查看说明') + '<span class="collapse-caret' + (homeLoanNoteExpanded ? ' open' : '') + '">▾</span></button>';
+          html += '<div class="collapsible-body' + (homeLoanNoteExpanded ? ' open' : '') + '"><div class="sub-number"' + (g.status === "due" ? ' style="color:var(--danger);font-weight:600;"' : '') + '>' + glideNote + '</div></div>';
+        }
       }
     }
     html += '</div>';
 
     html += '<div class="card">';
     html += '<h3>💵 本月现金流（' + cf.monthLabel + (cf.confirmed ? '，已确认' : '，测算值') + '）</h3>';
-    html += '<div class="row"><span>到手工资</span><span class="big-number" style="font-size:18px;">' + money(cf.netPay) + '</span></div>';
+    html += '<div class="row"><span>到手工资</span><span class="big-number">' + money(cf.netPay) + '</span></div>';
     html += renderAllocationBar(cf);
     if (!cf.confirmed) html += '<div class="sub-number">测算值，实际以工资条为准，去"理财"页点"确认工资"</div>';
     html += '</div>';
@@ -1412,7 +1426,7 @@
 
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">' + (cf.confirmed ? '本月工资（已确认）' : '本月测算（估算）') + ' · ' + cf.monthLabel + '</h3><button class="link-btn" id="confirmSalaryBtn">' + (cf.confirmed ? '修改' : '确认工资') + '</button></div>';
-    html += '<div class="row"><span>到手工资</span><span class="big-number" style="font-size:18px;">' + money(cf.netPay) + '</span></div>';
+    html += '<div class="row"><span>到手工资</span><span class="big-number">' + money(cf.netPay) + '</span></div>';
     html += renderAllocationBar(cf);
     if (!cf.confirmed) html += '<div class="sub-number">这是按现金流参数估算的数字，实际工资以工资条为准——拿到工资条后点"确认工资"填入实发数额</div>';
     html += '<button class="btn btn-primary btn-block" id="registerMonthBtn" style="margin-top:10px;">登记本月存入</button>';
@@ -1759,6 +1773,11 @@
       });
       var icsBtn = document.getElementById("exportIcsBtn");
       if (icsBtn) icsBtn.addEventListener("click", exportKeyDatesIcs);
+
+      var kdToggleBtn = document.getElementById("kdToggleBtn");
+      if (kdToggleBtn) kdToggleBtn.addEventListener("click", function () { homeKeyDatesExpanded = !homeKeyDatesExpanded; render(); });
+      var loanNoteToggleBtn = document.getElementById("loanNoteToggleBtn");
+      if (loanNoteToggleBtn) loanNoteToggleBtn.addEventListener("click", function () { homeLoanNoteExpanded = !homeLoanNoteExpanded; render(); });
 
       document.querySelectorAll("[data-cal-view]").forEach(function (btn) {
         btn.addEventListener("click", function () {
