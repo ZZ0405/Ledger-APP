@@ -280,12 +280,15 @@ body{
 
 .cal-bars{display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 2px;}
 .cal-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer;}
-.cal-bar-amt{font-size:10px;color:var(--text-dim);margin-bottom:3px;min-height:12px;}
+.cal-bar-amt{font-size:10px;color:var(--text-dim);margin-bottom:3px;min-height:12px;white-space:nowrap;}
 .cal-bar{width:100%;max-width:26px;background:#eef2f2;border-radius:6px 6px 3px 3px;transition:height .3s ease;}
 .cal-bar.has-spend{background:var(--c-invest);}
 .cal-bar.is-today{background:var(--teal);}
-.cal-bar-label{font-size:11px;color:var(--text-dim);margin-top:6px;}
+.cal-bar-label{font-size:11px;color:var(--text-dim);margin-top:6px;white-space:nowrap;}
 .cal-bar-label.is-today{color:var(--teal-dark);font-weight:600;}
+.cal-bars-year .cal-bar-col{padding:0 1px;}
+.cal-bars-year .cal-bar-label{font-size:9.5px;}
+.cal-bars-year .cal-bar-amt{font-size:9px;}
 
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
 .cal-weekday{text-align:center;font-size:11px;color:var(--text-dim);padding-bottom:4px;}
