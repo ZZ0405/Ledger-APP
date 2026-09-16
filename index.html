@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>攒够</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0d9488">
+<meta name="theme-color" content="#28a7a7">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,11 +20,31 @@
   </header>
   <main id="content"></main>
   <nav class="bottom-nav">
-    <button data-page="home" class="nav-btn active"><span class="nav-icon">🏠</span><span>首页</span></button>
-    <button data-page="expenses" class="nav-btn"><span class="nav-icon">💰</span><span>记账</span></button>
-    <button data-page="loans" class="nav-btn"><span class="nav-icon">📋</span><span>还款</span></button>
-    <button data-page="goals" class="nav-btn"><span class="nav-icon">🎯</span><span>理财</span></button>
-    <button data-page="more" class="nav-btn"><span class="nav-icon">⚙️</span><span>更多</span></button>
+    <button data-page="home" class="nav-btn active">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path class="ic-fillable" d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg></span>
+      <span>首页</span>
+    </button>
+    <button data-page="expenses" class="nav-btn">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path class="ic-fillable" fill-rule="evenodd" d="M4 7a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v2h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM16.7 12.2a1.2 1.2 0 1 1-2.4 0 1.2 1.2 0 0 1 2.4 0z"/></svg></span>
+      <span>记账</span>
+    </button>
+    <button data-page="loans" class="nav-btn">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path class="ic-fillable" fill-rule="evenodd" d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM8.3 10.6h7.4v1H8.3zM8.3 13.6h7.4v1H8.3zM8.3 16.6h4.4v1H8.3z"/></svg></span>
+      <span>还款</span>
+    </button>
+    <button data-page="goals" class="nav-btn">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path class="ic-fillable" fill-rule="evenodd" d="M12 4a8 8 0 1 0 .001 0zM12 7.5a4.5 4.5 0 1 0 .001 0zM12 10.8a1.2 1.2 0 1 0 .001 0z"/></svg></span>
+      <span>理财</span>
+    </button>
+    <button data-page="more" class="nav-btn">
+      <span class="nav-icon"><svg viewBox="0 0 24 24">
+        <path class="ic-line" d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/>
+        <circle class="ic-fillable" cx="13.5" cy="6" r="2"/>
+        <circle class="ic-fillable" cx="7.5" cy="12" r="2"/>
+        <circle class="ic-fillable" cx="15" cy="18" r="2"/>
+      </svg></span>
+      <span>更多</span>
+    </button>
   </nav>
 </div>
 <div id="modalRoot"></div>
