@@ -150,6 +150,18 @@
     return new Date(d.getFullYear(), d.getMonth() + n, 1);
   }
 
+  function addDays(d, n) {
+    var r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    r.setDate(r.getDate() + n);
+    return r;
+  }
+
+  function startOfWeekMonday(d) {
+    var day = d.getDay();
+    var diff = day === 0 ? -6 : 1 - day;
+    return addDays(d, diff);
+  }
+
   function monthsBetween(d1, d2) {
     return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
   }
@@ -252,6 +264,171 @@
     }
     legendHtml += '</div>';
     return barHtml + legendHtml;
+  }
+
+  /* ---------------- Home spending calendar ---------------- */
+  var homeCalView = "month"; // "week" | "month" | "year"
+  var homeCalAnchor = new Date();
+
+  function expensesTotalForDate(dateStr) {
+    return sum(state.expenses.filter(function (x) { return x.date === dateStr; }), function (x) { return x.amount; });
+  }
+
+  function expensesTotalForMonth(mKey) {
+    return sum(state.expenses.filter(function (x) { return monthKey(x.date) === mKey; }), function (x) { return x.amount; });
+  }
+
+  function renderHomeCalendarCard() {
+    var html = '<div class="card calendar-card">';
+    html += '<div class="cal-header">';
+    html += '<h3 style="margin:0;">📅 收支日历</h3>';
+    html += '<div class="cal-view-switch">';
+    [["week", "周"], ["month", "月"], ["year", "年"]].forEach(function (v) {
+      html += '<button class="cal-view-btn' + (homeCalView === v[0] ? ' active' : '') + '" data-cal-view="' + v[0] + '">' + v[1] + '</button>';
+    });
+    html += '</div>';
+    html += '</div>';
+
+    var periodLabel = "";
+    var now = new Date();
+
+    if (homeCalView === "week") {
+      var monday = startOfWeekMonday(homeCalAnchor);
+      var sunday = addDays(monday, 6);
+      periodLabel = (monday.getMonth() + 1) + "月" + monday.getDate() + "日 - " + (sunday.getMonth() + 1) + "月" + sunday.getDate() + "日";
+      var days = [];
+      for (var i = 0; i < 7; i++) days.push(addDays(monday, i));
+      var amounts = days.map(function (d) { return expensesTotalForDate(fmtDate(d)); });
+      var maxAmt = Math.max.apply(null, amounts.concat([0.01]));
+      var weekLabels = ["一", "二", "三", "四", "五", "六", "日"];
+      html += '<div class="cal-nav"><button data-cal-nav="-1">&lsaquo;</button><span class="cal-period-label">' + periodLabel + '</span><button data-cal-nav="1">&rsaquo;</button></div>';
+      html += '<div class="cal-bars">';
+      days.forEach(function (d, idx) {
+        var dateStr = fmtDate(d);
+        var amt = amounts[idx];
+        var isToday = dateStr === todayStr();
+        var pct = Math.max(2, (amt / maxAmt) * 100);
+        html += '<div class="cal-bar-col" data-cal-day="' + dateStr + '">';
+        html += '<div class="cal-bar-amt">' + (amt > 0 ? Math.round(amt) : "") + '</div>';
+        html += '<div class="cal-bar' + (amt > 0 ? ' has-spend' : '') + (isToday ? ' is-today' : '') + '" style="height:' + pct + '%"></div>';
+        html += '<div class="cal-bar-label' + (isToday ? ' is-today' : '') + '">周' + weekLabels[idx] + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '<div class="sub-number" style="text-align:center;">本周合计 ' + money(sum(amounts, function (a) { return a; })) + '</div>';
+    } else if (homeCalView === "year") {
+      var y = homeCalAnchor.getFullYear();
+      periodLabel = y + "年";
+      var monthAmts = [];
+      for (var m = 0; m < 12; m++) monthAmts.push(expensesTotalForMonth(y + "-" + String(m + 1).padStart(2, "0")));
+      var maxMonthAmt = Math.max.apply(null, monthAmts.concat([0.01]));
+      html += '<div class="cal-nav"><button data-cal-nav="-1">&lsaquo;</button><span class="cal-period-label">' + periodLabel + '</span><button data-cal-nav="1">&rsaquo;</button></div>';
+      html += '<div class="cal-bars">';
+      monthAmts.forEach(function (amt, idx) {
+        var mKeyStr = y + "-" + String(idx + 1).padStart(2, "0");
+        var isCurrent = mKeyStr === monthKey(todayStr());
+        var pct = Math.max(2, (amt / maxMonthAmt) * 100);
+        html += '<div class="cal-bar-col" data-cal-month="' + mKeyStr + '">';
+        html += '<div class="cal-bar-amt">' + (amt > 0 ? Math.round(amt) : "") + '</div>';
+        html += '<div class="cal-bar' + (amt > 0 ? ' has-spend' : '') + (isCurrent ? ' is-today' : '') + '" style="height:' + pct + '%"></div>';
+        html += '<div class="cal-bar-label' + (isCurrent ? ' is-today' : '') + '">' + (idx + 1) + '月</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '<div class="sub-number" style="text-align:center;">' + y + '年合计 ' + money(sum(monthAmts, function (a) { return a; })) + '</div>';
+    } else {
+      var vy = homeCalAnchor.getFullYear();
+      var vm = homeCalAnchor.getMonth();
+      periodLabel = vy + "年" + (vm + 1) + "月";
+      var firstDay = new Date(vy, vm, 1);
+      var leading = (firstDay.getDay() + 6) % 7; // 0=Mon
+      var daysInMonthCount = new Date(vy, vm + 1, 0).getDate();
+      var dayAmts = [];
+      for (var d2 = 1; d2 <= daysInMonthCount; d2++) dayAmts.push(expensesTotalForDate(fmtDate(new Date(vy, vm, d2))));
+      var maxDayAmt = Math.max.apply(null, dayAmts.concat([0.01]));
+      var monthTotal = sum(dayAmts, function (a) { return a; });
+      html += '<div class="cal-nav"><button data-cal-nav="-1">&lsaquo;</button><span class="cal-period-label">' + periodLabel + '</span><button data-cal-nav="1">&rsaquo;</button></div>';
+      html += '<div class="sub-number" style="text-align:center;margin-bottom:6px;">本月合计 ' + money(monthTotal) + '</div>';
+      html += '<div class="cal-grid">';
+      ["一", "二", "三", "四", "五", "六", "日"].forEach(function (w) { html += '<div class="cal-weekday">' + w + '</div>'; });
+      for (var e = 0; e < leading; e++) html += '<div class="cal-day empty"></div>';
+      for (var d3 = 1; d3 <= daysInMonthCount; d3++) {
+        var dStr = fmtDate(new Date(vy, vm, d3));
+        var dAmt = dayAmts[d3 - 1];
+        var dIsToday = dStr === todayStr();
+        var alpha = dAmt > 0 ? 0.14 + 0.5 * (dAmt / maxDayAmt) : 0;
+        var bgStyle = dAmt > 0 ? "background:rgba(13,148,136," + alpha.toFixed(2) + ");" : "";
+        html += '<div class="cal-day' + (dIsToday ? ' is-today' : '') + '" data-cal-day="' + dStr + '" style="' + bgStyle + '">';
+        html += '<span>' + d3 + '</span>';
+        if (dAmt > 0) html += '<span class="cal-day-amt">' + Math.round(dAmt) + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function openInfoModal(title, bodyHtml) {
+    var root = document.getElementById("modalRoot");
+    root.innerHTML =
+      '<div class="modal-overlay center" id="modalOverlay">' +
+      '<div class="modal">' +
+      '<div class="modal-header"><h3>' + escapeHtml(title) + '</h3><button type="button" class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+      bodyHtml +
+      '</div>' +
+      '</div>';
+    document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+    document.getElementById("modalOverlay").addEventListener("click", function (e) {
+      if (e.target.id === "modalOverlay") closeModal();
+    });
+  }
+
+  function openDayDetailModal(dateStr) {
+    var list = state.expenses.filter(function (x) { return x.date === dateStr; });
+    var total = sum(list, function (x) { return x.amount; });
+    var d = parseDate(dateStr);
+    var title = d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日";
+
+    var body = '<div class="big-number" style="font-size:24px;">' + money(total) + '</div>';
+    if (!list.length) {
+      body += '<div class="empty-state">这天没有开销记录</div>';
+    } else {
+      var byCat = {};
+      list.forEach(function (x) { byCat[x.category] = (byCat[x.category] || 0) + Number(x.amount); });
+      var catKeys = Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; });
+      var maxCat = catKeys.length ? byCat[catKeys[0]] : 0;
+
+      body += '<div style="margin-top:10px;">';
+      catKeys.forEach(function (c) {
+        var pct = maxCat > 0 ? (byCat[c] / maxCat) * 100 : 0;
+        var sharePct = total > 0 ? Math.round((byCat[c] / total) * 100) : 0;
+        var cColor = categoryColor(c);
+        body += '<div class="bar-row"><span class="bar-label">' + escapeHtml(c) + '</span><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%;background:' + cColor.text + ';"></span><span class="bar-pct">' + sharePct + '%</span></span><span class="bar-amount">' + money(byCat[c]) + '</span></div>';
+      });
+      body += '</div>';
+
+      body += '<div class="history-list" style="margin-top:14px;">';
+      list.slice().sort(function (a, b) { return b.id.localeCompare(a.id); }).forEach(function (x) {
+        var xColor = categoryColor(x.category);
+        body += '<div class="expense-item" data-day-exp-id="' + x.id + '" style="cursor:pointer;">';
+        body += '<div class="exp-main"><span><span class="cat-tag" style="background:' + xColor.bg + ';color:' + xColor.text + ';">' + escapeHtml(x.category) + '</span></span>';
+        if (x.note) body += '<span class="exp-note">' + escapeHtml(x.note) + '</span>';
+        body += '</div>';
+        body += '<span class="exp-amount">' + money(x.amount) + '</span>';
+        body += '</div>';
+      });
+      body += '</div>';
+    }
+
+    openInfoModal(title, body);
+    document.querySelectorAll("[data-day-exp-id]").forEach(function (row) {
+      row.addEventListener("click", function () {
+        var exp = state.expenses.find(function (x) { return x.id === row.dataset.dayExpId; });
+        if (exp) { closeModal(); openExpenseModal(exp); }
+      });
+    });
   }
 
   function monthKey(dateStr) {
@@ -526,12 +703,11 @@
     return state.salaryRecords.find(function (r) { return r.month === mKey; });
   }
 
-  function openConfirmSalaryModal() {
-    var now = new Date();
-    var mKey = monthKey(fmtDate(now));
+  function openConfirmSalaryModal(mKeyOverride) {
+    var mKey = mKeyOverride || monthKey(todayStr());
     var existing = getConfirmedSalary(mKey);
     openFormModal({
-      title: "确认本月工资 · " + monthLabel(mKey),
+      title: (mKey === monthKey(todayStr()) ? "确认本月工资" : "确认/补录工资") + " · " + monthLabel(mKey),
       fields: [
         { key: "actualNetPay", label: "本月实发工资（工资条上的实发数额）", type: "number", value: existing ? existing.actualNetPay : "" },
         { key: "note", label: "备注（可选）", type: "text", value: existing ? existing.note : "" },
@@ -770,6 +946,7 @@
     var html = "";
 
     html += renderGreeting();
+    html += renderHomeCalendarCard();
 
     html += '<div class="card">';
     html += '<h3>📅 关键日期</h3>';
@@ -1267,15 +1444,18 @@
     html += '<div class="card">';
     html += '<div class="row"><h3 style="margin:0;">未来6个月测算</h3><button class="link-btn" id="toggleSalaryHistory">工资记录</button></div>';
     series.forEach(function (r) {
-      html += '<div class="row"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 利息 ' + money(r.interestReserveSplit) + ' · 应急 ' + money(r.emergencyContribution) + ' · 定投 ' + money(r.investContribution) + '</span></div>';
+      var rMonthKey = monthKey(fmtDate(r.date));
+      html += '<div class="row" data-confirm-month="' + rMonthKey + '" style="cursor:pointer;"><span>' + r.monthLabel + (r.confirmed ? ' ✓' : '') + '</span><span>到手 ' + money(r.netPay) + ' · 利息 ' + money(r.interestReserveSplit) + ' · 应急 ' + money(r.emergencyContribution) + ' · 定投 ' + money(r.investContribution) + '</span></div>';
     });
+    html += '<div class="sub-number">点某个月份可以直接确认/修改那个月的工资</div>';
+    html += '<div class="row" style="margin-top:10px;"><button class="btn btn-outline btn-sm btn-block" id="backfillSalaryBtn">+ 补录其他月份工资</button></div>';
     html += '<div class="history-list" id="salaryHistory" style="display:none;">';
     if (!state.salaryRecords.length) {
       html += '<div class="hrow"><span>暂无确认记录</span></div>';
     } else {
       state.salaryRecords.slice().sort(function (a, b) { return b.month.localeCompare(a.month); }).forEach(function (r) {
         var thumbUrl = (r.payslipId && payslipCache && payslipCache[r.payslipId]) ? payslipCache[r.payslipId] : null;
-        html += '<div class="hrow payslip-row">';
+        html += '<div class="hrow payslip-row" data-confirm-month="' + r.month + '" style="cursor:pointer;">';
         if (thumbUrl) {
           html += '<img src="' + thumbUrl + '" class="payslip-thumb" data-payslip-view="' + r.payslipId + '">';
         } else if (r.payslipId) {
@@ -1579,6 +1759,35 @@
       });
       var icsBtn = document.getElementById("exportIcsBtn");
       if (icsBtn) icsBtn.addEventListener("click", exportKeyDatesIcs);
+
+      document.querySelectorAll("[data-cal-view]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          homeCalView = btn.dataset.calView;
+          homeCalAnchor = new Date();
+          render();
+        });
+      });
+      document.querySelectorAll("[data-cal-nav]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var dir = parseInt(btn.dataset.calNav, 10);
+          if (homeCalView === "week") homeCalAnchor = addDays(homeCalAnchor, dir * 7);
+          else if (homeCalView === "year") homeCalAnchor = new Date(homeCalAnchor.getFullYear() + dir, homeCalAnchor.getMonth(), 1);
+          else homeCalAnchor = addMonths(homeCalAnchor, dir);
+          render();
+        });
+      });
+      document.querySelectorAll("[data-cal-day]").forEach(function (cell) {
+        cell.addEventListener("click", function () { openDayDetailModal(cell.dataset.calDay); });
+      });
+      document.querySelectorAll("[data-cal-month]").forEach(function (col) {
+        col.addEventListener("click", function () {
+          var mk = col.dataset.calMonth;
+          var parts = mk.split("-");
+          homeCalAnchor = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+          homeCalView = "month";
+          render();
+        });
+      });
     }
 
     if (page === "expenses") {
@@ -1643,12 +1852,30 @@
         if (currentPage === "goals") render();
       });
       document.querySelectorAll("[data-payslip-view]").forEach(function (img) {
-        img.addEventListener("click", function () {
+        img.addEventListener("click", function (e) {
+          e.stopPropagation();
           openImageLightbox(img.getAttribute("src"));
         });
       });
       document.getElementById("editParamsBtn").addEventListener("click", openCashFlowParamsModal);
-      document.getElementById("confirmSalaryBtn").addEventListener("click", openConfirmSalaryModal);
+      document.getElementById("confirmSalaryBtn").addEventListener("click", function () { openConfirmSalaryModal(); });
+      document.querySelectorAll("[data-confirm-month]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          openConfirmSalaryModal(row.dataset.confirmMonth);
+        });
+      });
+      document.getElementById("backfillSalaryBtn").addEventListener("click", function () {
+        openFormModal({
+          title: "补录其他月份工资",
+          fields: [{ key: "month", label: "选择月份", type: "month", value: monthKey(todayStr()) }],
+          submitLabel: "下一步",
+          onSubmit: function (v) {
+            if (!v.month) { toast("请选择月份"); return; }
+            closeModal();
+            openConfirmSalaryModal(v.month);
+          }
+        });
+      });
       document.getElementById("toggleSalaryHistory").addEventListener("click", function () {
         var box = document.getElementById("salaryHistory");
         box.style.display = box.style.display === "none" ? "block" : "none";
